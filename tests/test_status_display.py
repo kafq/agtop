@@ -42,3 +42,8 @@ def test_running_card_spins() -> None:
 
 def test_unseen_card_is_yellow() -> None:
     assert render_card(_session("done_unseen")).startswith("🟡")
+
+
+def test_closed_card_is_grey_and_dim() -> None:
+    card = render_card(_session("closed"))
+    assert card.startswith("⚪ [dim]demo")

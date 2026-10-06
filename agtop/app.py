@@ -51,6 +51,7 @@ def _detail_plain_text(session: dict) -> str:
         "active": "IDLE",
         "done": "DONE",
         "done_unseen": "DONE - not checked yet",
+        "closed": "CLOSED",
         "waiting_question": "WAITING - Needs Input",
         "waiting_permission": "WAITING - Needs Permission",
     }
@@ -222,10 +223,10 @@ class AgtopApp(App):
             info["alive"] = pid is not None
             if pid and front_tty and ttys.get(str(pid)) == front_tty:
                 self._seen.mark(sid, now)
-            # A hook "prompt" with no "stop" means working, but a process
-            # that has ended cannot be working any more.
-            if not info["alive"] and info["status"] == "working":
-                info["status"] = "done"
+            # Whatever the log or hooks last said, a session whose process
+            # has ended is closed: it cannot work, wait or need checking.
+            if not info["alive"]:
+                info["status"] = "closed"
             if not info["alive"] and info["age"] > SHOW_RECENT:
                 continue
             if pid and info["status"] == "waiting_permission":
@@ -297,6 +298,7 @@ class AgtopApp(App):
         item.set_class(status.startswith("waiting"), "waiting")
         item.set_class(status == "working", "working")
         item.set_class(status == "done_unseen", "unseen")
+        item.set_class(status == "closed", "closed")
 
     def _rebuild_list(self) -> None:
         listview = self.query_one("#slist", ListView)

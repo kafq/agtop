@@ -94,9 +94,13 @@ SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 def render_card(session: dict, frame: int = 0) -> str:
     """Card colours: red needs you, spinner is running, yellow is finished
-    but not checked for 5 minutes, green is finished."""
+    but not checked for 5 minutes, green is finished, grey is closed."""
     status = session["status"]
     content_width = W - 5
+    if status == "closed":
+        project = _textual_escape(_truncate(session["project"], content_width))
+        task = _textual_escape(_truncate(session["task"], content_width)) if session["task"] else ""
+        return f"⚪ [dim]{project}[/dim]\n   [dim]› {task}[/dim]\n"
     tag = _source_tag(session)
     sub = _sub_tag(session)
     # Escape tool_summary once — it may contain brackets like [a-z]

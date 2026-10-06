@@ -55,6 +55,10 @@ ListItem.waiting.--highlight {
     border: double $error;
 }
 
+ListItem.closed {
+    border: solid $panel;
+}
+
 ListItem.unseen {
     border: solid $warning;
 }
