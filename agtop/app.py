@@ -92,6 +92,10 @@ def _history_session_label(hs: HistorySession) -> str:
 class AgtopApp(App):
     TITLE = "agtop"
     CSS_PATH = "monitor.tcss"
+    # Below NARROW_WIDTH columns the detail panel is hidden and the session
+    # list fills the window, so agtop works as a slim status column.
+    NARROW_WIDTH = 96
+    HORIZONTAL_BREAKPOINTS = [(0, "-narrow"), (NARROW_WIDTH, "-wide")]
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),

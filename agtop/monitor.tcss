@@ -17,6 +17,14 @@ Screen {
     padding: 0;
 }
 
+Screen.-narrow #left {
+    width: 1fr;
+}
+
+Screen.-narrow #right {
+    display: none;
+}
+
 ListView {
     height: 1fr;
     padding: 0 1;
