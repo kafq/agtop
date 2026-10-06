@@ -824,6 +824,56 @@ def _fallback_jump(
     return False, "not found"
 
 
+def terminal_front_tty() -> str:
+    """TTY of Terminal's front tab, or "" when Terminal is not the active app.
+
+    Checks first that Terminal runs, because "tell application" would
+    launch it otherwise.
+    """
+    if not _app_running("/Terminal.app/Contents/MacOS/Terminal"):
+        return ""
+    script = '''
+tell application "Terminal"
+    if not frontmost then return ""
+    try
+        return tty of selected tab of front window
+    on error
+        return ""
+    end try
+end tell
+'''
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except Exception:
+        return ""
+    return result.stdout.strip()
+
+
+def pid_ttys(pids: list[str]) -> dict[str, str]:
+    """Map each pid to its controlling TTY as "/dev/ttysNNN"."""
+    if not pids:
+        return {}
+    try:
+        output = subprocess.check_output(
+            ["ps", "-o", "pid=,tty=", "-p", ",".join(pids)],
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        return {}
+    ttys: dict[str, str] = {}
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1] not in ("??", "-"):
+            ttys[parts[0]] = f"/dev/{parts[1]}"
+    return ttys
+
+
 JUMP_EFFECTS = ("pulse", "flash", "none")
 PULSE_HELPER = Path(__file__).resolve().parent.parent / "bin" / "agtop-pulse"
 

@@ -55,6 +55,15 @@ ListItem.waiting.--highlight {
     border: double $error;
 }
 
+ListItem.unseen {
+    border: solid $warning;
+}
+
+ListItem.unseen.--highlight {
+    border: double $warning;
+    background: $warning-darken-3;
+}
+
 ListItem.working {
     border: solid $accent-darken-1;
 }

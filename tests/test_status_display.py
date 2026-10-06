@@ -38,3 +38,7 @@ def test_card_colours() -> None:
 def test_running_card_spins() -> None:
     frames = {render_card(_session("working"), frame).split("[/bold cyan]")[0] for frame in range(len(SPINNER_FRAMES))}
     assert len(frames) == len(SPINNER_FRAMES)
+
+
+def test_unseen_card_is_yellow() -> None:
+    assert render_card(_session("done_unseen")).startswith("🟡")

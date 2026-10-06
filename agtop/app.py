@@ -1,4 +1,5 @@
 import subprocess
+import threading
 import time
 from datetime import datetime
 from typing import Optional
@@ -30,8 +31,16 @@ from .parser import (
     SHOW_RECENT,
     SessionParser,
 )
-from .providers import set_jump_effect, get_live_session_ids, has_active_children, jump_to_session
+from .providers import (
+    get_live_session_ids,
+    has_active_children,
+    jump_to_session,
+    pid_ttys,
+    set_jump_effect,
+    terminal_front_tty,
+)
 from .render import _clip, render_card, render_detail
+from .seen import SeenStore, is_unseen
 from .subagents import scan_subagents
 from .widgets import AgentDetailModal, AgentFlow, Timeline
 
@@ -41,6 +50,7 @@ def _detail_plain_text(session: dict) -> str:
         "working": "RUNNING",
         "active": "IDLE",
         "done": "DONE",
+        "done_unseen": "DONE - not checked yet",
         "waiting_question": "WAITING - Needs Input",
         "waiting_permission": "WAITING - Needs Permission",
     }
@@ -114,6 +124,10 @@ class AgtopApp(App):
         self._cfg = load_config()
         self._last_ctrl_c = float("-inf")
         self._spin_frame = 0
+        self._seen = SeenStore()
+        self._seen_saved_at = 0.0
+        self._front_tty = ""
+        threading.Thread(target=self._watch_front_tab, daemon=True).start()
         set_jump_effect(
             str(self._cfg.get("jump_effect", "pulse")),
             shake=bool(self._cfg.get("jump_shake", True)),
@@ -196,11 +210,18 @@ class AgtopApp(App):
             self._cached_live_map = get_live_session_ids(candidates)
         live_map = self._cached_live_map
 
+        now = time.time()
+        live_pids = [str(pid) for pid in live_map.values() if pid]
+        ttys = pid_ttys(live_pids)
+        front_tty = self._front_tty
+
         out: list[dict] = []
         for info in candidates:
             sid = info["session_id"]
             pid = live_map.get(sid)
             info["alive"] = pid is not None
+            if pid and front_tty and ttys.get(str(pid)) == front_tty:
+                self._seen.mark(sid, now)
             # A hook "prompt" with no "stop" means working, but a process
             # that has ended cannot be working any more.
             if not info["alive"] and info["status"] == "working":
@@ -210,14 +231,21 @@ class AgtopApp(App):
             if pid and info["status"] == "waiting_permission":
                 if has_active_children(pid):
                     info["status"] = "working"
+            if is_unseen(info, self._seen.get(sid), now):
+                info["status"] = "done_unseen"
             info["subscribed"] = sid in self._subscribed
             out.append(info)
+
+        if now - self._seen_saved_at > 30:
+            self._seen.save(now)
+            self._seen_saved_at = now
 
         out.sort(
             key=lambda s: (
                 0 if s["status"].startswith("waiting") else
-                1 if s["alive"] else
-                2,
+                1 if s["status"] == "done_unseen" else
+                2 if s["alive"] else
+                3,
                 -s["mtime"],
             )
         )
@@ -265,15 +293,10 @@ class AgtopApp(App):
             self._timer = self.set_interval(want, self._do_refresh)
 
     def _apply_item_classes(self, item: ListItem, session: dict) -> None:
-        if session["status"].startswith("waiting"):
-            item.add_class("waiting")
-            item.remove_class("working")
-        elif session["status"] == "working":
-            item.add_class("working")
-            item.remove_class("waiting")
-        else:
-            item.remove_class("waiting")
-            item.remove_class("working")
+        status = session["status"]
+        item.set_class(status.startswith("waiting"), "waiting")
+        item.set_class(status == "working", "working")
+        item.set_class(status == "done_unseen", "unseen")
 
     def _rebuild_list(self) -> None:
         listview = self.query_one("#slist", ListView)
@@ -286,6 +309,16 @@ class AgtopApp(App):
             listview.index = self._selected_index()
 
     SPINNER_INTERVAL = 0.1
+    FRONT_TAB_INTERVAL = 1.0
+
+    def _watch_front_tab(self) -> None:
+        """Background loop: which Terminal tab is in front right now."""
+        while True:
+            self._front_tty = terminal_front_tty()
+            time.sleep(self.FRONT_TAB_INTERVAL)
+
+    def on_unmount(self) -> None:
+        self._seen.save(time.time())
 
     def _tick_spinner(self) -> None:
         """Advance the spinner on running cards only; the rest stay untouched."""
@@ -583,6 +616,7 @@ class AgtopApp(App):
             session.get("_birthtime", 0),
         )
         if ok:
+            self._seen.mark(session["session_id"], time.time())
             self.notify(f"→ {session['project']} ({via})")
         else:
             self.notify(f"Jump failed: {via}", severity="warning")
