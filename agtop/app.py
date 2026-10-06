@@ -234,7 +234,12 @@ class AgtopApp(App):
             if pid and info["status"] == "waiting_permission":
                 if has_active_children(pid):
                     info["status"] = "working"
-            info["status"] = classify(info, self._seen.get(sid), now)
+            info["status"] = classify(
+                info,
+                self._seen.get(sid),
+                now,
+                float(self._cfg.get("idle_after", 300)),
+            )
             info["subscribed"] = sid in self._subscribed
             out.append(info)
 

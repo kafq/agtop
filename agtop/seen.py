@@ -31,21 +31,31 @@ def finished_at(session: dict[str, Any]) -> float:
     return float(session.get("mtime", 0))
 
 
-def finished_status(session: dict[str, Any], last_seen: Optional[float], now: float) -> str:
+def finished_status(
+    session: dict[str, Any],
+    last_seen: Optional[float],
+    now: float,
+    idle_after: float = IDLE_AFTER,
+) -> str:
     """Status for a finished, open session: done_unseen, done or idle."""
     if last_seen is None or last_seen < finished_at(session):
         return "done_unseen"
-    if now - last_seen <= IDLE_AFTER:
+    if now - last_seen <= idle_after:
         return "done"
     return "idle"
 
 
-def classify(session: dict[str, Any], last_seen: Optional[float], now: float) -> str:
+def classify(
+    session: dict[str, Any],
+    last_seen: Optional[float],
+    now: float,
+    idle_after: float = IDLE_AFTER,
+) -> str:
     """The session's display status. Only finished, open sessions change."""
     status = str(session.get("status", ""))
     if status not in FINISHED_STATUSES or not session.get("alive"):
         return status
-    return finished_status(session, last_seen, now)
+    return finished_status(session, last_seen, now, idle_after)
 
 
 class SeenStore:

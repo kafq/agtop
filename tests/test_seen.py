@@ -47,3 +47,9 @@ def test_store_round_trip(tmp_path) -> None:
     store.mark("s1", NOW)
     store.save(NOW)
     assert SeenStore(path).get("s1") == NOW
+
+
+def test_idle_after_is_configurable() -> None:
+    session = _finished(NOW - 120)
+    assert classify(session, NOW - 40, NOW, idle_after=30) == "idle"
+    assert classify(session, NOW - 40, NOW) == "done"
