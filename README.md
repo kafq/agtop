@@ -78,6 +78,24 @@ enabled = true          # macOS notification for waiting sessions
 sound = true            # Terminal bell
 ```
 
+## Window pulse (Terminal.app)
+
+After a jump, agtop highlights the target window with a soft glow. The glow
+comes from a small Swift helper. Build it once (needs the Xcode command line
+tools):
+
+```sh
+./pulse/build.sh
+```
+
+Without the helper, agtop flashes the tab background instead. Choose the
+effect in `config.toml`:
+
+```toml
+[jump]
+jump_effect = "pulse"  # or "flash", or "none"
+```
+
 ## License
 
 MIT

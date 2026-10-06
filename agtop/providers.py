@@ -2,8 +2,10 @@ import json
 import os
 import shutil
 import subprocess
+import threading
 from abc import ABC, abstractmethod
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from .hooks import EVENTS_DIR
@@ -430,6 +432,43 @@ end tell
 '''
         return _run_osascript(script)
 
+    def window_bounds(self, tty: str) -> Optional[tuple[int, int, int, int]]:
+        """Bounds (left, top, right, bottom) of the window that holds the tab."""
+        tty = tty.strip()
+        if not tty:
+            return None
+        script = f'''
+tell application "Terminal"
+    repeat with w in every window
+        try
+            set windowTabs to every tab of w
+        on error
+            set windowTabs to {{}}
+        end try
+        repeat with t in windowTabs
+            if tty of t is "{_escape_applescript_string(tty)}" then
+                set b to bounds of w
+                return ((item 1 of b) as text) & "," & ((item 2 of b) as text) & "," & ((item 3 of b) as text) & "," & ((item 4 of b) as text)
+            end if
+        end repeat
+    end repeat
+    return ""
+end tell
+'''
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            values = [int(part) for part in result.stdout.strip().split(",")]
+        except Exception:
+            return None
+        if len(values) != 4 or values[2] <= values[0] or values[3] <= values[1]:
+            return None
+        return values[0], values[1], values[2], values[3]
+
     def flash(self, tty: str) -> None:
         """Blink the tab's background twice, then restore it.
 
@@ -747,17 +786,47 @@ def _fallback_jump(
     return False, "not found"
 
 
-_flash_enabled = True
+JUMP_EFFECTS = ("pulse", "flash", "none")
+PULSE_HELPER = Path(__file__).resolve().parent.parent / "bin" / "agtop-pulse"
+
+_jump_effect = "pulse"
 
 
-def set_flash_on_jump(enabled: bool) -> None:
-    global _flash_enabled
-    _flash_enabled = enabled
+def set_jump_effect(effect: str) -> None:
+    global _jump_effect
+    _jump_effect = effect if effect in JUMP_EFFECTS else "pulse"
+
+
+def _pulse_helper() -> Optional[str]:
+    if PULSE_HELPER.is_file() and os.access(PULSE_HELPER, os.X_OK):
+        return str(PULSE_HELPER)
+    return shutil.which("agtop-pulse")
+
+
+def _pulse_or_flash(provider: "TerminalAppProvider", tty: str) -> None:
+    helper = _pulse_helper()
+    bounds = provider.window_bounds(tty) if helper else None
+    if helper and bounds:
+        try:
+            subprocess.Popen(
+                [helper, *(str(value) for value in bounds)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+        except Exception:
+            pass
+    provider.flash(tty)
 
 
 def _flash_terminal_tab(provider: TerminalProvider, tty: str) -> None:
-    if _flash_enabled and isinstance(provider, TerminalAppProvider):
+    if _jump_effect == "none" or not isinstance(provider, TerminalAppProvider):
+        return
+    if _jump_effect == "flash":
         provider.flash(tty)
+        return
+    # The bounds query is a blocking osascript call; keep it off the UI thread.
+    threading.Thread(target=_pulse_or_flash, args=(provider, tty), daemon=True).start()
 
 
 def jump_to_session(

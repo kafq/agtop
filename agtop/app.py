@@ -30,7 +30,7 @@ from .parser import (
     SHOW_RECENT,
     SessionParser,
 )
-from .providers import set_flash_on_jump, get_live_session_ids, has_active_children, jump_to_session
+from .providers import set_jump_effect, get_live_session_ids, has_active_children, jump_to_session
 from .render import _clip, render_card, render_detail
 from .subagents import scan_subagents
 from .widgets import AgentDetailModal, AgentFlow, Timeline
@@ -106,7 +106,7 @@ class AgtopApp(App):
     def __init__(self) -> None:
         super().__init__()
         self._cfg = load_config()
-        set_flash_on_jump(bool(self._cfg.get("flash_on_jump", True)))
+        set_jump_effect(str(self._cfg.get("jump_effect", "pulse")))
         self.sessions: list[dict] = []
         self.sel_id: Optional[str] = None
         self._parser = SessionParser()
