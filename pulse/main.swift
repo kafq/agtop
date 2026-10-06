@@ -67,12 +67,33 @@ let view = NSView(frame: NSRect(origin: .zero, size: frame.size))
 view.wantsLayer = true
 window.contentView = view
 
-// A thin ring with a wide shadow of the same colour. With no fill and no
-// shadowPath, the shadow follows the ring only, so the glow stays outside
-// the text area instead of washing over it.
+// The window's own area inside the overlay. Everything is masked out here,
+// so the glow only radiates outward and never covers the window content.
+let windowArea = view.bounds.insetBy(dx: spread, dy: spread)
+
+let glowLayer = CALayer()
+glowLayer.frame = view.bounds
+view.layer?.addSublayer(glowLayer)
+
+let cutout = CAShapeLayer()
+cutout.frame = view.bounds
+let maskPath = CGMutablePath()
+maskPath.addRect(view.bounds)
+maskPath.addRoundedRect(
+    in: windowArea,
+    cornerWidth: cornerRadius,
+    cornerHeight: cornerRadius
+)
+cutout.path = maskPath
+cutout.fillRule = .evenOdd
+glowLayer.mask = cutout
+
+// A ring just outside the window edge, with a wide shadow of the same
+// colour. A CALayer border is drawn inside its frame, so the frame grows by
+// the border width to keep the ring clear of the cutout.
 let ring = CALayer()
-ring.frame = view.bounds.insetBy(dx: spread, dy: spread)
-ring.cornerRadius = cornerRadius
+ring.frame = windowArea.insetBy(dx: -4, dy: -4)
+ring.cornerRadius = cornerRadius + 4
 ring.borderWidth = 4
 ring.borderColor = glowColour.cgColor
 ring.shadowColor = glowColour.cgColor
@@ -80,12 +101,12 @@ ring.shadowOffset = .zero
 ring.shadowRadius = 28
 ring.shadowOpacity = 1
 ring.opacity = 0
-view.layer?.addSublayer(ring)
+glowLayer.addSublayer(ring)
 
 // A wider, fainter halo behind the ring makes the glow carry further.
 let halo = CALayer()
-halo.frame = ring.frame
-halo.cornerRadius = cornerRadius
+halo.frame = windowArea.insetBy(dx: -6, dy: -6)
+halo.cornerRadius = cornerRadius + 6
 halo.borderWidth = 6
 halo.borderColor = glowColour.withAlphaComponent(0.5).cgColor
 halo.shadowColor = glowColour.cgColor
@@ -93,7 +114,7 @@ halo.shadowOffset = .zero
 halo.shadowRadius = 52
 halo.shadowOpacity = 0.9
 halo.opacity = 0
-view.layer?.insertSublayer(halo, below: ring)
+glowLayer.insertSublayer(halo, below: ring)
 
 window.orderFrontRegardless()
 
