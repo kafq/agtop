@@ -100,12 +100,15 @@ class AgtopApp(App):
         Binding("r", "refresh_or_resume", "Refresh/Resume"),
         Binding("c", "copy_output", "Copy"),
         Binding("v", "view_agents", "Agents"),
+        # Replaces Textual's default Ctrl+C hint ("press Ctrl+Q to quit").
+        Binding("ctrl+c", "ctrl_c_quit", show=False, priority=True),
         # "h" registered dynamically — see on_mount / _enter/_exit_history
     ]
 
     def __init__(self) -> None:
         super().__init__()
         self._cfg = load_config()
+        self._last_ctrl_c = float("-inf")
         set_jump_effect(
             str(self._cfg.get("jump_effect", "pulse")),
             shake=bool(self._cfg.get("jump_shake", True)),
@@ -588,6 +591,17 @@ class AgtopApp(App):
         self._resume_cwd = hs.actual_cwd or None
         self._resume_source = hs.source
         self.exit()
+
+    CTRL_C_QUIT_WINDOW = 1.5
+
+    def action_ctrl_c_quit(self) -> None:
+        """Quit on a second Ctrl+C, the way Claude Code does."""
+        now = time.monotonic()
+        if now - self._last_ctrl_c <= self.CTRL_C_QUIT_WINDOW:
+            self.exit()
+            return
+        self._last_ctrl_c = now
+        self.notify("Press Ctrl+C again to quit", timeout=self.CTRL_C_QUIT_WINDOW)
 
     def action_subscribe(self) -> None:
         if self._history_mode:
