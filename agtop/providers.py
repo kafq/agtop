@@ -26,6 +26,15 @@ def _run_osascript(script: str, timeout: int = 5) -> bool:
         return False
 
 
+def _app_running(executable_suffix: str) -> bool:
+    """True when a process whose executable path ends with the suffix is running."""
+    try:
+        output = subprocess.check_output(["ps", "-axo", "comm="], text=True, timeout=2)
+    except Exception:
+        return False
+    return any(line.strip().endswith(executable_suffix) for line in output.splitlines())
+
+
 def _pgrep_running(*args: str) -> bool:
     try:
         result = subprocess.run(
@@ -384,7 +393,9 @@ end tell
         return "Terminal"
 
     def available(self) -> bool:
-        return _pgrep_running("-x", "Terminal")
+        # pgrep -x Terminal misses Terminal.app on recent macOS, while ps lists
+        # it by executable path, so match that path instead.
+        return _app_running("/Terminal.app/Contents/MacOS/Terminal")
 
     def activate(self, terminal_info: dict[str, Any]) -> bool:
         tty = str(terminal_info.get("tty", "")).strip()
@@ -406,6 +417,41 @@ tell application "Terminal"
 end tell
 '''
         return _run_osascript(script)
+
+    def flash(self, tty: str) -> None:
+        """Blink the tab's background twice, then restore it.
+
+        Runs as a detached osascript so the delays never block the TUI.
+        """
+        tty = tty.strip()
+        if not tty:
+            return
+        script = f'''
+tell application "Terminal"
+    repeat with w in every window
+        repeat with t in every tab of w
+            if tty of t is "{_escape_applescript_string(tty)}" then
+                set original to background color of t
+                repeat 2 times
+                    set background color of t to {{65535, 11565, 37008}}
+                    delay 0.12
+                    set background color of t to original
+                    delay 0.12
+                end repeat
+                return
+            end if
+        end repeat
+    end repeat
+end tell
+'''
+        try:
+            subprocess.Popen(
+                ["osascript", "-e", script],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
 
 
 class WarpProvider(TerminalProvider):
@@ -669,6 +715,7 @@ def _fallback_jump(
                         break
 
         if resolved and provider.activate({"tty": resolved}):
+            _flash_terminal_tab(provider, resolved)
             return True, f"{provider.name} fallback"
 
     warp = _PROVIDER_BY_KEY["warp"]
@@ -680,6 +727,19 @@ def _fallback_jump(
                     return True, "Warp fallback"
 
     return False, "not found"
+
+
+_flash_enabled = True
+
+
+def set_flash_on_jump(enabled: bool) -> None:
+    global _flash_enabled
+    _flash_enabled = enabled
+
+
+def _flash_terminal_tab(provider: TerminalProvider, tty: str) -> None:
+    if _flash_enabled and isinstance(provider, TerminalAppProvider):
+        provider.flash(tty)
 
 
 def jump_to_session(
@@ -697,16 +757,19 @@ def jump_to_session(
                 continue
             if not provider.activate(terminal_info):
                 continue
+            _flash_terminal_tab(provider, str(terminal_info.get("tty", "")))
             activated.append(provider.name)
             if provider.name != "tmux":
                 return True, " + ".join(activated)
         if activated:
             return True, " + ".join(activated)
 
-    # Keep the old PID→TTY fallback around for debugging/comparison, but
-    # disable it for now so jump failures only reflect the hook-based path.
-    # return _fallback_jump(cwd, session_id, birthtime)
-    return False, no_hook_msg
+    # Without hook data (hooks not installed, or a session started before
+    # they were), find the tab through the agent process's TTY instead.
+    ok, via = _fallback_jump(cwd, session_id, birthtime)
+    if ok:
+        return ok, via
+    return False, no_hook_msg if terminal_info is None else via
 
 
 def has_active_children(pid: str) -> bool:

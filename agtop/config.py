@@ -13,6 +13,8 @@ DEFAULTS = {
     "notify": True,
     "notify_sound": True,
     "history_days": 7,
+    # Flash the Terminal.app tab after a jump, so it stands out among many windows.
+    "flash_on_jump": True,
 }
 
 
