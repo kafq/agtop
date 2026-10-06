@@ -472,8 +472,8 @@ end tell
     def shake(self, tty: str) -> None:
         """Shake the window sideways, then put it back where it was.
 
-        Runs as a detached osascript. The original bounds are restored even
-        when a step fails, so the window never stays offset.
+        Blocks until the shake ends, so call it off the UI thread. The
+        original position is restored even when a step fails.
         """
         tty = tty.strip()
         if not tty:
@@ -505,14 +505,7 @@ tell application "Terminal"
     end repeat
 end tell
 '''
-        try:
-            subprocess.Popen(
-                ["osascript", "-e", script],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except Exception:
-            pass
+        _run_osascript(script)
 
     def flash(self, tty: str) -> None:
         """Blink the tab's background twice, then restore it.
@@ -866,18 +859,24 @@ def _pulse_or_flash(provider: "TerminalAppProvider", tty: str) -> None:
     provider.flash(tty)
 
 
+def _highlight_window(provider: "TerminalAppProvider", tty: str) -> None:
+    # Shake first and wait for it: the pulse reads the window bounds once,
+    # so it must start after the window is back in place.
+    if _jump_shake:
+        provider.shake(tty)
+    if _jump_effect == "pulse":
+        _pulse_or_flash(provider, tty)
+    elif _jump_effect == "flash":
+        provider.flash(tty)
+
+
 def _flash_terminal_tab(provider: TerminalProvider, tty: str) -> None:
     if not isinstance(provider, TerminalAppProvider):
         return
-    if _jump_shake:
-        provider.shake(tty)
-    if _jump_effect == "none":
+    if not _jump_shake and _jump_effect == "none":
         return
-    if _jump_effect == "flash":
-        provider.flash(tty)
-        return
-    # The bounds query is a blocking osascript call; keep it off the UI thread.
-    threading.Thread(target=_pulse_or_flash, args=(provider, tty), daemon=True).start()
+    # Every step is a blocking osascript call; keep them off the UI thread.
+    threading.Thread(target=_highlight_window, args=(provider, tty), daemon=True).start()
 
 
 def jump_to_session(
