@@ -87,7 +87,13 @@ def _textual_escape(text: str) -> str:
     return text
 
 
-def render_card(session: dict) -> str:
+# Running sessions show a spinner instead of a dot. One braille cell plus a
+# space keeps the same two-cell width as the emoji dots.
+SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+def render_card(session: dict, frame: int = 0) -> str:
+    """Card colours: red needs you, spinner is running, green is finished."""
     status = session["status"]
     content_width = W - 5
     tag = _source_tag(session)
@@ -97,7 +103,7 @@ def render_card(session: dict) -> str:
 
     if status == "waiting_question":
         project = _textual_escape(_truncate(session["project"], content_width))
-        line1 = f"🟠 [bold]{project}[/bold]{tag}{sub}"
+        line1 = f"🔴 [bold]{project}[/bold]{tag}{sub}"
         line2 = _center("❓ Needs Input", content_width)
         line3 = ""
         return f"{line1}\n{line2}\n{line3}"
@@ -105,7 +111,7 @@ def render_card(session: dict) -> str:
     if status == "waiting_permission":
         project = _textual_escape(_truncate(session["project"], content_width))
         tool = raw_tool.split()[0] if raw_tool else ""
-        line1 = f"🟠 [bold]{project}[/bold]{tag}{sub}"
+        line1 = f"🔴 [bold]{project}[/bold]{tag}{sub}"
         label = f"⏳ Needs Permission  {tool}" if tool else "⏳ Needs Permission"
         line2 = _center(label, content_width)
         line3 = ""
@@ -114,16 +120,15 @@ def render_card(session: dict) -> str:
     if status == "working":
         duration = _format_duration(session["task_runtime"])
         tool = raw_tool.split()[0] if raw_tool else ""
-        suffix = f"[red]{duration}[/red]"
+        suffix = f"[cyan]{duration}[/cyan]"
         if tool:
             suffix += f" [yellow]{tool}[/yellow]"
         project_max = content_width - len(duration) - (len(tool) + 1 if tool else 0) - 2
         project = _textual_escape(_truncate(session["project"], project_max))
-        line1 = f"🔴 [bold]{project}[/bold]{tag}{sub}  {suffix}"
-    elif status == "active":
-        project = _textual_escape(_truncate(session["project"], content_width))
-        line1 = f"🟡 [bold]{project}[/bold]{tag}{sub}"
+        spinner = SPINNER_FRAMES[frame % len(SPINNER_FRAMES)]
+        line1 = f"[bold cyan]{spinner}[/bold cyan]  [bold]{project}[/bold]{tag}{sub}  {suffix}"
     else:
+        # "active" (quiet, guessed from timers) and "done" both mean finished.
         project = _textual_escape(_truncate(session["project"], content_width))
         line1 = f"🟢 [bold]{project}[/bold]{tag}{sub}"
 

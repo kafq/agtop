@@ -118,23 +118,19 @@ def _compute_status_from_event(
         return "done"
 
     last_event = str(event_state.get("last_event", "")).strip()
-    last_event_ts = _event_epoch(event_state.get("last_event_ts"))
 
     if last_event == "notification":
         return _waiting_status_from_event(event_state)
 
     if last_event == "prompt":
-        if last_event_ts is not None and now - last_event_ts <= WORKING_THRESHOLD:
-            return "working"
-        return "active"
+        # Hooks report the end of a turn (stop) and every wait (notification),
+        # so a prompt means working until one of those arrives, however long
+        # the turn takes. A 30 s cut-off showed long turns as idle.
+        return "working"
 
     status = str(event_state.get("status", "")).strip()
     if status not in KNOWN_STATUSES:
         return None
-    if status == "working":
-        if last_event_ts is not None and now - last_event_ts <= WORKING_THRESHOLD:
-            return "working"
-        return "active"
     return status
 
 

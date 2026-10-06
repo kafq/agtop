@@ -113,6 +113,7 @@ class AgtopApp(App):
         super().__init__()
         self._cfg = load_config()
         self._last_ctrl_c = float("-inf")
+        self._spin_frame = 0
         set_jump_effect(
             str(self._cfg.get("jump_effect", "pulse")),
             shake=bool(self._cfg.get("jump_shake", True)),
@@ -166,6 +167,7 @@ class AgtopApp(App):
         self.query_one("#agent-viz").styles.display = "none"
         self._cur_interval = REFRESH_FAST
         self._timer = self.set_interval(REFRESH_FAST, self._do_refresh)
+        self.set_interval(self.SPINNER_INTERVAL, self._tick_spinner)
         self._sync_footer_bindings()
         self._do_refresh()
 
@@ -199,6 +201,10 @@ class AgtopApp(App):
             sid = info["session_id"]
             pid = live_map.get(sid)
             info["alive"] = pid is not None
+            # A hook "prompt" with no "stop" means working, but a process
+            # that has ended cannot be working any more.
+            if not info["alive"] and info["status"] == "working":
+                info["status"] = "done"
             if not info["alive"] and info["age"] > SHOW_RECENT:
                 continue
             if pid and info["status"] == "waiting_permission":
@@ -273,11 +279,25 @@ class AgtopApp(App):
         listview = self.query_one("#slist", ListView)
         listview.clear()
         for session in self.sessions:
-            item = ListItem(Static(render_card(session), markup=True))
+            item = ListItem(Static(render_card(session, self._spin_frame), markup=True))
             self._apply_item_classes(item, session)
             listview.append(item)
         if self.sessions:
             listview.index = self._selected_index()
+
+    SPINNER_INTERVAL = 0.1
+
+    def _tick_spinner(self) -> None:
+        """Advance the spinner on running cards only; the rest stay untouched."""
+        self._spin_frame += 1
+        if self._history_mode:
+            return
+        items = list(self.query_one("#slist", ListView).children)
+        if len(items) != len(self.sessions):
+            return
+        for item, session in zip(items, self.sessions):
+            if session["status"] == "working":
+                item.query_one(Static).update(render_card(session, self._spin_frame))
 
     def _update_cards(self) -> None:
         listview = self.query_one("#slist", ListView)
@@ -286,7 +306,7 @@ class AgtopApp(App):
             self._rebuild_list()
             return
         for index, session in enumerate(self.sessions):
-            items[index].query_one(Static).update(render_card(session))
+            items[index].query_one(Static).update(render_card(session, self._spin_frame))
             self._apply_item_classes(items[index], session)
         selected_index = self._selected_index()
         if self.sessions and listview.index != selected_index:

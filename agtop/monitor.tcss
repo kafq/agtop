@@ -46,22 +46,22 @@ ListItem.--highlight {
 }
 
 ListItem.waiting {
-    background: $warning-darken-3;
-    border: solid $warning;
+    background: $error-darken-3;
+    border: solid $error;
 }
 
 ListItem.waiting.--highlight {
-    background: $warning-darken-2;
-    border: double $warning;
+    background: $error-darken-2;
+    border: double $error;
 }
 
 ListItem.working {
-    border: solid $error-darken-1;
+    border: solid $accent-darken-1;
 }
 
 ListItem.working.--highlight {
-    border: double $error;
-    background: $error-darken-3;
+    border: double $accent;
+    background: $accent-darken-3;
 }
 
 RichLog {
