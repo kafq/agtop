@@ -41,7 +41,7 @@ from .providers import (
     user_idle_seconds,
 )
 from .render import _clip, render_card, render_detail
-from .seen import SeenStore, is_unseen
+from .seen import SeenStore, classify
 from .subagents import scan_subagents
 from .widgets import AgentDetailModal, AgentFlow, Timeline
 
@@ -52,6 +52,7 @@ def _detail_plain_text(session: dict) -> str:
         "active": "IDLE",
         "done": "DONE",
         "done_unseen": "DONE - not checked yet",
+        "idle": "IDLE - checked, quiet for 5+ minutes",
         "closed": "CLOSED",
         "waiting_question": "WAITING - Needs Input",
         "waiting_permission": "WAITING - Needs Permission",
@@ -233,8 +234,7 @@ class AgtopApp(App):
             if pid and info["status"] == "waiting_permission":
                 if has_active_children(pid):
                     info["status"] = "working"
-            if is_unseen(info, self._seen.get(sid), now):
-                info["status"] = "done_unseen"
+            info["status"] = classify(info, self._seen.get(sid), now)
             info["subscribed"] = sid in self._subscribed
             out.append(info)
 
@@ -244,10 +244,9 @@ class AgtopApp(App):
 
         out.sort(
             key=lambda s: (
-                0 if s["status"].startswith("waiting") else
-                1 if s["status"] == "done_unseen" else
-                2 if s["alive"] else
-                3,
+                {"done_unseen": 1, "working": 2, "done": 3, "active": 3, "idle": 4}.get(
+                    s["status"], 0 if s["status"].startswith("waiting") else 5
+                ),
                 -s["mtime"],
             )
         )
@@ -299,7 +298,7 @@ class AgtopApp(App):
         item.set_class(status.startswith("waiting"), "waiting")
         item.set_class(status == "working", "working")
         item.set_class(status == "done_unseen", "unseen")
-        item.set_class(status == "closed", "closed")
+        item.set_class(status in ("closed", "idle"), "closed")
 
     def _rebuild_list(self) -> None:
         listview = self.query_one("#slist", ListView)

@@ -94,7 +94,8 @@ SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 def render_card(session: dict, frame: int = 0) -> str:
     """Card colours: red needs you, spinner is running, yellow is finished
-    but not checked for 5 minutes, green is finished, grey is closed."""
+    and not checked yet, green is checked, grey is quiet for 5+ minutes,
+    grey and dimmed is closed."""
     status = session["status"]
     content_width = W - 5
     if status == "closed":
@@ -135,6 +136,9 @@ def render_card(session: dict, frame: int = 0) -> str:
     elif status == "done_unseen":
         project = _textual_escape(_truncate(session["project"], content_width))
         line1 = f"🟡 [bold]{project}[/bold]{tag}{sub}"
+    elif status == "idle":
+        project = _textual_escape(_truncate(session["project"], content_width))
+        line1 = f"⚪ [bold]{project}[/bold]{tag}{sub}"
     else:
         # "active" (quiet, guessed from timers) and "done" both mean finished.
         project = _textual_escape(_truncate(session["project"], content_width))

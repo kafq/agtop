@@ -1,9 +1,9 @@
-from agtop.seen import UNSEEN_AFTER, SeenStore, is_unseen
+from agtop.seen import IDLE_AFTER, SeenStore, classify
 
 NOW = 1_000_000.0
 
 
-def _done(finished: float, status: str = "done", alive: bool = True) -> dict:
+def _finished(finished: float, status: str = "done", alive: bool = True) -> dict:
     return {
         "status": status,
         "alive": alive,
@@ -12,34 +12,33 @@ def _done(finished: float, status: str = "done", alive: bool = True) -> dict:
     }
 
 
-def test_fresh_finish_stays_green() -> None:
-    assert not is_unseen(_done(NOW - 60), None, NOW)
+def test_just_finished_and_not_looked_is_yellow() -> None:
+    assert classify(_finished(NOW - 5), None, NOW) == "done_unseen"
 
 
-def test_old_unchecked_finish_turns_yellow() -> None:
-    assert is_unseen(_done(NOW - UNSEEN_AFTER - 1), None, NOW)
+def test_looked_before_it_finished_is_still_yellow() -> None:
+    assert classify(_finished(NOW - 60), NOW - 120, NOW) == "done_unseen"
 
 
-def test_checked_after_finish_stays_green() -> None:
-    finished = NOW - UNSEEN_AFTER - 60
-    assert not is_unseen(_done(finished), finished + 10, NOW)
+def test_looked_after_it_finished_is_green() -> None:
+    assert classify(_finished(NOW - 60), NOW - 30, NOW) == "done"
 
 
-def test_checked_before_finish_does_not_count() -> None:
-    finished = NOW - UNSEEN_AFTER - 60
-    assert is_unseen(_done(finished), finished - 10, NOW)
+def test_looked_long_ago_turns_grey() -> None:
+    finished = NOW - IDLE_AFTER - 120
+    assert classify(_finished(finished), NOW - IDLE_AFTER - 1, NOW) == "idle"
 
 
-def test_running_waiting_or_closed_sessions_are_never_yellow() -> None:
-    old = NOW - UNSEEN_AFTER - 60
-    assert not is_unseen(_done(old, status="working"), None, NOW)
-    assert not is_unseen(_done(old, status="waiting_question"), None, NOW)
-    assert not is_unseen(_done(old, alive=False), None, NOW)
+def test_other_states_are_unchanged() -> None:
+    assert classify(_finished(NOW - 5, status="working"), None, NOW) == "working"
+    assert classify(_finished(NOW - 5, status="waiting_question"), None, NOW) == "waiting_question"
+    assert classify(_finished(NOW - 5, alive=False), None, NOW) == "done"
 
 
 def test_without_hooks_the_log_time_is_the_finish_time() -> None:
-    session = {"status": "done", "alive": True, "mtime": NOW - UNSEEN_AFTER - 1}
-    assert is_unseen(session, None, NOW)
+    session = {"status": "done", "alive": True, "mtime": NOW - 10}
+    assert classify(session, NOW - 5, NOW) == "done"
+    assert classify(session, NOW - 20, NOW) == "done_unseen"
 
 
 def test_store_round_trip(tmp_path) -> None:

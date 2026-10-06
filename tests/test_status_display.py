@@ -47,3 +47,8 @@ def test_unseen_card_is_yellow() -> None:
 def test_closed_card_is_grey_and_dim() -> None:
     card = render_card(_session("closed"))
     assert card.startswith("⚪ [dim]demo")
+
+
+def test_idle_card_is_grey_but_not_dimmed() -> None:
+    card = render_card(_session("idle"))
+    assert card.startswith("⚪ [bold]demo")
