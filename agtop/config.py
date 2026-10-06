@@ -16,6 +16,8 @@ DEFAULTS = {
     # Highlight the Terminal.app window after a jump: "pulse" (glow, needs
     # bin/agtop-pulse; falls back to flash), "flash" (tab background), "none".
     "jump_effect": "pulse",
+    # Shake the Terminal.app window after a jump, on top of jump_effect.
+    "jump_shake": True,
 }
 
 

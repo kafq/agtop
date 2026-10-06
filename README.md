@@ -94,6 +94,7 @@ effect in `config.toml`:
 ```toml
 [jump]
 jump_effect = "pulse"  # or "flash", or "none"
+jump_shake = true      # shake the window too
 ```
 
 ## License

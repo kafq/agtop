@@ -38,7 +38,7 @@ let glowColour = (arguments.count > 5 ? colour(fromHex: arguments[5]) : nil)
     ?? NSColor(srgbRed: 1.0, green: 0.18, blue: 0.56, alpha: 1)
 
 /// Room around the window for the glow to spread into.
-let spread: CGFloat = 28
+let spread: CGFloat = 60
 /// Matches the rounded corners of macOS 26 windows closely enough.
 let cornerRadius: CGFloat = 14
 let duration: CFTimeInterval = 1.2
@@ -73,20 +73,33 @@ window.contentView = view
 let ring = CALayer()
 ring.frame = view.bounds.insetBy(dx: spread, dy: spread)
 ring.cornerRadius = cornerRadius
-ring.borderWidth = 2
+ring.borderWidth = 4
 ring.borderColor = glowColour.cgColor
 ring.shadowColor = glowColour.cgColor
 ring.shadowOffset = .zero
-ring.shadowRadius = 14
+ring.shadowRadius = 28
 ring.shadowOpacity = 1
 ring.opacity = 0
 view.layer?.addSublayer(ring)
 
+// A wider, fainter halo behind the ring makes the glow carry further.
+let halo = CALayer()
+halo.frame = ring.frame
+halo.cornerRadius = cornerRadius
+halo.borderWidth = 6
+halo.borderColor = glowColour.withAlphaComponent(0.5).cgColor
+halo.shadowColor = glowColour.cgColor
+halo.shadowOffset = .zero
+halo.shadowRadius = 52
+halo.shadowOpacity = 0.9
+halo.opacity = 0
+view.layer?.insertSublayer(halo, below: ring)
+
 window.orderFrontRegardless()
 
-// Two soft breaths: rise, settle, rise again, fade out.
+// Two full-strength breaths: rise, settle, rise again, fade out.
 let pulse = CAKeyframeAnimation(keyPath: "opacity")
-pulse.values = [0, 1, 0.3, 0.85, 0]
+pulse.values = [0, 1, 0.25, 1, 0]
 pulse.keyTimes = [0, 0.22, 0.48, 0.68, 1]
 pulse.timingFunctions = Array(
     repeating: CAMediaTimingFunction(name: .easeInEaseOut),
@@ -97,6 +110,7 @@ pulse.duration = duration
 CATransaction.begin()
 CATransaction.setCompletionBlock { app.terminate(nil) }
 ring.add(pulse, forKey: "pulse")
+halo.add(pulse, forKey: "pulse")
 CATransaction.commit()
 
 // Safety net: never linger, even if the animation is dropped.

@@ -469,6 +469,51 @@ end tell
             return None
         return values[0], values[1], values[2], values[3]
 
+    def shake(self, tty: str) -> None:
+        """Shake the window sideways, then put it back where it was.
+
+        Runs as a detached osascript. The original bounds are restored even
+        when a step fails, so the window never stays offset.
+        """
+        tty = tty.strip()
+        if not tty:
+            return
+        script = f'''
+tell application "Terminal"
+    repeat with w in every window
+        try
+            set windowTabs to every tab of w
+        on error
+            set windowTabs to {{}}
+        end try
+        repeat with t in windowTabs
+            if tty of t is "{_escape_applescript_string(tty)}" then
+                -- Use position, not bounds: on multi-display setups Terminal
+                -- does not set bounds back exactly, and the window drifts.
+                set original to position of w
+                set {{x, y}} to original
+                try
+                    repeat with dx in {{14, -14, 11, -11, 7, -7, 3, -3}}
+                        set position of w to {{x + dx, y}}
+                        delay 0.025
+                    end repeat
+                end try
+                set position of w to original
+                return
+            end if
+        end repeat
+    end repeat
+end tell
+'''
+        try:
+            subprocess.Popen(
+                ["osascript", "-e", script],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
+
     def flash(self, tty: str) -> None:
         """Blink the tab's background twice, then restore it.
 
@@ -790,11 +835,13 @@ JUMP_EFFECTS = ("pulse", "flash", "none")
 PULSE_HELPER = Path(__file__).resolve().parent.parent / "bin" / "agtop-pulse"
 
 _jump_effect = "pulse"
+_jump_shake = True
 
 
-def set_jump_effect(effect: str) -> None:
-    global _jump_effect
+def set_jump_effect(effect: str, shake: bool = True) -> None:
+    global _jump_effect, _jump_shake
     _jump_effect = effect if effect in JUMP_EFFECTS else "pulse"
+    _jump_shake = shake
 
 
 def _pulse_helper() -> Optional[str]:
@@ -820,7 +867,11 @@ def _pulse_or_flash(provider: "TerminalAppProvider", tty: str) -> None:
 
 
 def _flash_terminal_tab(provider: TerminalProvider, tty: str) -> None:
-    if _jump_effect == "none" or not isinstance(provider, TerminalAppProvider):
+    if not isinstance(provider, TerminalAppProvider):
+        return
+    if _jump_shake:
+        provider.shake(tty)
+    if _jump_effect == "none":
         return
     if _jump_effect == "flash":
         provider.flash(tty)

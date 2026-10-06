@@ -106,7 +106,10 @@ class AgtopApp(App):
     def __init__(self) -> None:
         super().__init__()
         self._cfg = load_config()
-        set_jump_effect(str(self._cfg.get("jump_effect", "pulse")))
+        set_jump_effect(
+            str(self._cfg.get("jump_effect", "pulse")),
+            shake=bool(self._cfg.get("jump_shake", True)),
+        )
         self.sessions: list[dict] = []
         self.sel_id: Optional[str] = None
         self._parser = SessionParser()
