@@ -854,6 +854,25 @@ end tell
     return result.stdout.strip()
 
 
+def user_idle_seconds() -> Optional[float]:
+    """Seconds since the last keyboard, mouse or trackpad input, or None."""
+    try:
+        output = subprocess.check_output(
+            ["ioreg", "-c", "IOHIDSystem", "-d", "4"],
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        return None
+    for line in output.splitlines():
+        if '"HIDIdleTime"' in line:
+            try:
+                return int(line.rsplit("=", 1)[1].strip()) / 1_000_000_000
+            except ValueError:
+                return None
+    return None
+
+
 def pid_ttys(pids: list[str]) -> dict[str, str]:
     """Map each pid to its controlling TTY as "/dev/ttysNNN"."""
     if not pids:

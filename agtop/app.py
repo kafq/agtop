@@ -38,6 +38,7 @@ from .providers import (
     pid_ttys,
     set_jump_effect,
     terminal_front_tty,
+    user_idle_seconds,
 )
 from .render import _clip, render_card, render_detail
 from .seen import SeenStore, is_unseen
@@ -314,9 +315,15 @@ class AgtopApp(App):
     FRONT_TAB_INTERVAL = 1.0
 
     def _watch_front_tab(self) -> None:
-        """Background loop: which Terminal tab is in front right now."""
+        """Background loop: the Terminal tab you are looking at right now.
+
+        Empty while you are away: focus alone does not mean attention.
+        """
+        idle_limit = float(self._cfg.get("seen_idle_limit", 60))
         while True:
-            self._front_tty = terminal_front_tty()
+            idle = user_idle_seconds()
+            away = idle is not None and idle > idle_limit
+            self._front_tty = "" if away else terminal_front_tty()
             time.sleep(self.FRONT_TAB_INTERVAL)
 
     def on_unmount(self) -> None:

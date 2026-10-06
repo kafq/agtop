@@ -18,6 +18,10 @@ DEFAULTS = {
     "jump_effect": "pulse",
     # Shake the Terminal.app window after a jump, on top of jump_effect.
     "jump_shake": True,
+    # A focused tab counts as checked only if you used the keyboard or mouse
+    # within this many seconds, so a window left in focus while you are away
+    # still turns yellow.
+    "seen_idle_limit": 60,
 }
 
 
