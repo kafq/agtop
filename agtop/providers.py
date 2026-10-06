@@ -380,7 +380,13 @@ class TerminalAppProvider(TerminalProvider):
 tell application "Terminal"
     set output to ""
     repeat with w in every window
-        repeat with t in every tab of w
+        -- Some windows (e.g. Settings) have no tabs; skip them instead of failing.
+        try
+            set windowTabs to every tab of w
+        on error
+            set windowTabs to {}
+        end try
+        repeat with t in windowTabs
             set output to output & (tty of t) & linefeed
         end repeat
     end repeat
@@ -406,7 +412,13 @@ end tell
 tell application "Terminal"
     activate
     repeat with w in every window
-        repeat with t in every tab of w
+        -- Some windows (e.g. Settings) have no tabs; skip them instead of failing.
+        try
+            set windowTabs to every tab of w
+        on error
+            set windowTabs to {{}}
+        end try
+        repeat with t in windowTabs
             if tty of t is "{_escape_applescript_string(tty)}" then
                 set selected tab of w to t
                 set index of w to 1
@@ -429,7 +441,13 @@ end tell
         script = f'''
 tell application "Terminal"
     repeat with w in every window
-        repeat with t in every tab of w
+        -- Some windows (e.g. Settings) have no tabs; skip them instead of failing.
+        try
+            set windowTabs to every tab of w
+        on error
+            set windowTabs to {{}}
+        end try
+        repeat with t in windowTabs
             if tty of t is "{_escape_applescript_string(tty)}" then
                 set original to background color of t
                 repeat 2 times
