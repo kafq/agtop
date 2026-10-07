@@ -49,21 +49,50 @@ def _pgrep_running(*args: str) -> bool:
         return False
 
 
-def _load_terminal_info(session_id: str) -> Optional[dict[str, Any]]:
+def _load_event(session_id: str) -> dict[str, Any]:
     if not session_id:
-        return None
-
+        return {}
     path = EVENTS_DIR / f"{session_id}.json"
     try:
         with open(path, "r", encoding="utf-8") as file_obj:
             data = json.load(file_obj)
     except (OSError, json.JSONDecodeError):
-        return None
+        return {}
+    return data if isinstance(data, dict) else {}
 
+
+def _load_terminal_info(session_id: str) -> Optional[dict[str, Any]]:
+    data = _load_event(session_id)
     terminal = data.get("terminal")
     if not isinstance(terminal, dict) or not terminal:
         return None
+    terminal = dict(terminal)
+    if not terminal.get("tty"):
+        # Claude runs hooks without a terminal, so the hook often cannot read
+        # the TTY itself. The agent process it recorded still has one.
+        tty = agent_tty(data.get("pid"))
+        if tty:
+            terminal["tty"] = tty
     return terminal
+
+
+def agent_tty(pid: Any) -> str:
+    """The TTY of a running Claude process as "/dev/ttysNNN", or ""."""
+    if not isinstance(pid, int) or pid <= 0:
+        return ""
+    try:
+        output = subprocess.check_output(
+            ["ps", "-o", "tty=,comm=", "-p", str(pid)],
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        return ""
+    parts = output.split(None, 1)
+    # A reused pid would belong to some other program; only trust Claude.
+    if len(parts) != 2 or parts[0] in ("??", "-") or "claude" not in parts[1]:
+        return ""
+    return f"/dev/{parts[0]}"
 
 
 def _normalize_term_program(term_program: Any) -> str:
@@ -378,18 +407,24 @@ class WezTermProvider(TerminalProvider):
 
 
 class TerminalAppProvider(TerminalProvider):
+    # Read every tab's tty in one Apple Event, not one event per tab.
     _LIST_SCRIPT = r'''
 tell application "Terminal"
+    try
+        set windowTtys to tty of every tab of every window
+    on error
+        -- Some windows (e.g. Settings) have no tabs; read them one by one.
+        set windowTtys to {}
+        repeat with w in every window
+            try
+                set end of windowTtys to tty of every tab of w
+            end try
+        end repeat
+    end try
     set output to ""
-    repeat with w in every window
-        -- Some windows (e.g. Settings) have no tabs; skip them instead of failing.
-        try
-            set windowTabs to every tab of w
-        on error
-            set windowTabs to {}
-        end try
-        repeat with t in windowTabs
-            set output to output & (tty of t) & linefeed
+    repeat with tabTtys in windowTtys
+        repeat with t in tabTtys
+            set output to output & t & linefeed
         end repeat
     end repeat
     return output

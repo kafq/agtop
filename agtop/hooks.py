@@ -89,16 +89,17 @@ def _find_agent_pid(tree: dict[int, dict[str, Any]]) -> int:
     return os.getppid()
 
 
-def _detect_tty() -> str:
+def _detect_tty(agent_pid: int) -> str:
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         try:
             return os.ttyname(stream.fileno())
         except (AttributeError, OSError):
             continue
 
+    # Claude runs hooks without a terminal; the agent process itself has one.
     try:
         output = subprocess.check_output(
-            ["ps", "-o", "tty=", "-p", str(os.getpid())],
+            ["ps", "-o", "tty=", "-p", str(agent_pid)],
             text=True,
             timeout=2,
         ).strip()
@@ -139,7 +140,7 @@ def _detect_term_program(tree: dict[int, dict[str, Any]]) -> str:
     return ""
 
 
-def _detect_terminal_info(tree: dict[int, dict[str, Any]]) -> dict[str, Any]:
+def _detect_terminal_info(tree: dict[int, dict[str, Any]], agent_pid: int) -> dict[str, Any]:
     window_id = (
         os.environ.get("WINDOWID")
         or os.environ.get("TERM_SESSION_ID")
@@ -147,7 +148,7 @@ def _detect_terminal_info(tree: dict[int, dict[str, Any]]) -> dict[str, Any]:
         or ""
     )
     info = {
-        "tty": _detect_tty(),
+        "tty": _detect_tty(agent_pid),
         "term_program": _detect_term_program(tree),
         "window_id": window_id,
         "tmux_pane": os.environ.get("TMUX_PANE", ""),
@@ -227,13 +228,14 @@ def run_hook(event: str) -> int:
         return 0
 
     tree = _process_tree()
+    agent_pid = _find_agent_pid(tree)
     terminal = _merge_terminal_info(
         existing.get("terminal"),
-        _detect_terminal_info(tree),
+        _detect_terminal_info(tree, agent_pid),
     )
     state = {
         "session_id": session_id,
-        "pid": _find_agent_pid(tree),
+        "pid": agent_pid,
         "cwd": str(payload.get("cwd") or existing.get("cwd") or ""),
         "transcript_path": str(
             payload.get("transcript_path") or existing.get("transcript_path") or "",
