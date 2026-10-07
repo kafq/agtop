@@ -410,25 +410,39 @@ end tell
         if not tty:
             return False
 
+        # Read every tab's tty in one Apple Event; asking each tab separately
+        # costs a round trip per tab. Raise the right window before activating
+        # Terminal, so the wrong window never shows first.
         script = f'''
 tell application "Terminal"
-    activate
-    repeat with w in every window
-        -- Some windows (e.g. Settings) have no tabs; skip them instead of failing.
-        try
-            set windowTabs to every tab of w
-        on error
-            set windowTabs to {{}}
-        end try
-        repeat with t in windowTabs
-            if tty of t is "{_escape_applescript_string(tty)}" then
-                set selected tab of w to t
+    set target to "{_escape_applescript_string(tty)}"
+    try
+        set windowTtys to tty of every tab of every window
+    on error
+        -- Some windows (e.g. Settings) have no tabs; search them one by one.
+        set windowTtys to {{}}
+        repeat with w in every window
+            try
+                set end of windowTtys to tty of every tab of w
+            on error
+                set end of windowTtys to {{}}
+            end try
+        end repeat
+    end try
+    repeat with i from 1 to count of windowTtys
+        set tabTtys to item i of windowTtys
+        repeat with j from 1 to count of tabTtys
+            if item j of tabTtys is target then
+                set w to window i
+                set selected tab of w to tab j of w
                 set index of w to 1
+                activate
                 return "ok"
             end if
         end repeat
     end repeat
 end tell
+error "tab not found"
 '''
         return _run_osascript(script)
 
