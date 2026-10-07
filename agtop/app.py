@@ -343,6 +343,24 @@ class AgtopApp(App):
             self._front_tty = "" if away else terminal_front_tty()
             time.sleep(self.FRONT_TAB_INTERVAL)
 
+    def _select_hovered_card(self) -> None:
+        """Select the card under the mouse when the window gets focus.
+
+        Terminal.app swallows the click that activates an unfocused window,
+        so without this a card took two clicks. The terminal still reports
+        mouse movement while unfocused, so agtop knows which card the click
+        was aimed at.
+        """
+        if self._history_mode or self.mouse_over is None:
+            return
+        listview = self.query_one("#slist", ListView)
+        node = self.mouse_over
+        while node is not None and not (isinstance(node, ListItem) and node.parent is listview):
+            node = node.parent
+        if node is None:
+            return
+        listview.index = list(listview.children).index(node)
+
     def on_unmount(self) -> None:
         self._seen.save(time.time())
 
@@ -622,6 +640,7 @@ class AgtopApp(App):
 
     def on_app_focus(self, event: events.AppFocus) -> None:
         self._force_redraw()
+        self._select_hovered_card()
 
     def on_screen_resume(self, event: events.ScreenResume) -> None:
         self._force_redraw()
