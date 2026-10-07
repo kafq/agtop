@@ -995,6 +995,44 @@ def has_active_children(pid: str) -> bool:
         return False
 
 
+def _etime_seconds(etime: str) -> Optional[float]:
+    """Parse ps etime ("[[dd-]hh:]mm:ss") into seconds."""
+    days, _, clock = etime.strip().rpartition("-")
+    try:
+        parts = [int(part) for part in clock.split(":")]
+        seconds = int(days) * 86400 if days else 0
+    except ValueError:
+        return None
+    clock_seconds = 0
+    for part in parts:
+        clock_seconds = clock_seconds * 60 + part
+    return seconds + clock_seconds
+
+
+def has_children_younger_than(pid: str, seconds: float) -> bool:
+    """True when the process has a child started within the last `seconds`.
+
+    Claude keeps long-lived children (MCP servers) for its whole life, so
+    only children younger than the current turn point to a running tool.
+    """
+    try:
+        children = subprocess.check_output(["pgrep", "-P", pid], text=True, timeout=2).split()
+        if not children:
+            return False
+        output = subprocess.check_output(
+            ["ps", "-o", "etime=", "-p", ",".join(children)],
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        return False
+    for line in output.splitlines():
+        age = _etime_seconds(line)
+        if age is not None and age < seconds:
+            return True
+    return False
+
+
 def _build_ps_cache() -> dict[str, dict[str, str]]:
     cache: dict[str, dict[str, str]] = {}
     try:
@@ -1080,43 +1118,55 @@ def get_live_session_ids(sessions: list[dict]) -> dict[str, str]:
         sessions_by_id[session["session_id"]] = session
 
     live_map: dict[str, str] = {}
+    running = {pid for pid, _, _ in cli_pids}
 
+    # 1. Hook data names the exact process. One process can move to a new
+    #    session (/clear, /resume); its latest hook event wins.
+    latest_by_pid: dict[str, tuple[float, str]] = {}
+    for session in sessions:
+        event_state = session.get("_event_state")
+        if not isinstance(event_state, dict):
+            continue
+        pid = str(event_state.get("pid") or "")
+        if pid not in running:
+            continue
+        stamp = float(event_state.get("last_event_ts") or 0)
+        if stamp >= latest_by_pid.get(pid, (-1.0, ""))[0]:
+            latest_by_pid[pid] = (stamp, session["session_id"])
+    for pid, (_, session_id) in latest_by_pid.items():
+        live_map[session_id] = pid
+
+    claimed = set(live_map)
     for pid, cmd, _ in cli_pids:
+        if pid in latest_by_pid:
+            continue
         cwd = pid_cwd.get(pid, "").rstrip("/")
         if not cwd:
             continue
 
+        # 2. A resumed session carries its id on the command line.
         matched = False
         for session_id in sessions_by_id:
-            if f"--resume {session_id}" in cmd:
+            if session_id not in claimed and f"--resume {session_id}" in cmd:
                 live_map[session_id] = pid
+                claimed.add(session_id)
                 matched = True
                 break
         if matched:
             continue
 
-        cwd_sessions = sessions_by_cwd.get(cwd, [])
+        # 3. Otherwise the most recently written session in the same folder:
+        #    a running process writes to its current session, and start
+        #    times stop matching once the process switches sessions.
+        cwd_sessions = [
+            session
+            for session in sessions_by_cwd.get(cwd, [])
+            if session["session_id"] not in claimed
+        ]
         if not cwd_sessions:
             continue
-
-        if len(cwd_sessions) == 1:
-            live_map[cwd_sessions[0]["session_id"]] = pid
-            continue
-
-        pstart = _pid_start_time(pid)
-        if pstart <= 0:
-            continue
-
-        best_sid = None
-        best_diff = float("inf")
-        for session in cwd_sessions:
-            birthtime = session.get("_birthtime", 0)
-            if birthtime > 0 and pstart <= birthtime:
-                diff = birthtime - pstart
-                if diff < best_diff:
-                    best_diff = diff
-                    best_sid = session["session_id"]
-        if best_sid:
-            live_map[best_sid] = pid
+        newest = max(cwd_sessions, key=lambda session: session.get("mtime", 0))
+        live_map[newest["session_id"]] = pid
+        claimed.add(newest["session_id"])
 
     return live_map

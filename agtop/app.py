@@ -34,6 +34,7 @@ from .parser import (
 from .providers import (
     get_live_session_ids,
     has_active_children,
+    has_children_younger_than,
     jump_to_session,
     pid_ttys,
     set_jump_effect,
@@ -231,6 +232,8 @@ class AgtopApp(App):
                 info["status"] = "closed"
             if not info["alive"] and info["age"] > SHOW_RECENT:
                 continue
+            if pid and info["status"] == "working" and self._turn_is_stuck(info, str(pid), now):
+                info["status"] = "done"
             if pid and info["status"] == "waiting_permission":
                 if has_active_children(pid):
                     info["status"] = "working"
@@ -316,6 +319,16 @@ class AgtopApp(App):
             listview.index = self._selected_index()
 
     SPINNER_INTERVAL = 0.1
+    # A turn interrupted with Esc fires no Stop hook, so "working" can stick.
+    STUCK_AFTER = 5 * 60
+
+    def _turn_is_stuck(self, info: dict, pid: str, now: float) -> bool:
+        """Working, but the log has been quiet and no tool started this turn."""
+        if info["age"] <= self.STUCK_AFTER:
+            return False
+        event_state = info.get("_event_state") or {}
+        turn_started = event_state.get("last_event_ts") or info.get("_task_ep") or info["mtime"]
+        return not has_children_younger_than(pid, now - float(turn_started))
     FRONT_TAB_INTERVAL = 1.0
 
     def _watch_front_tab(self) -> None:
