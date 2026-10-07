@@ -65,21 +65,21 @@ ListItem.closed.-highlight {
 }
 
 ListItem.unseen {
-    border: solid $warning;
+    border: solid $primary;
 }
 
 ListItem.unseen.-highlight {
-    border: double $warning;
-    background: $warning-darken-3;
+    border: double $primary;
+    background: $primary-darken-3;
 }
 
 ListItem.working {
-    border: solid $primary-darken-1;
+    border: solid darkcyan;
 }
 
 ListItem.working.-highlight {
-    border: double $primary;
-    background: $primary-darken-3;
+    border: double darkcyan;
+    background: darkcyan 30%;
 }
 
 RichLog {

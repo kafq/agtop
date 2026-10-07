@@ -1,7 +1,7 @@
 """Remembers when you last looked at each session, and classifies finished ones.
 
 A finished open session is:
-- "done_unseen" (yellow) from the moment it finishes until you look at it,
+- "done_unseen" (blue) from the moment it finishes until you look at it,
 - "done" (green) after you looked, for IDLE_AFTER seconds since your last look,
 - "idle" (grey) once you have not looked for longer than that.
 

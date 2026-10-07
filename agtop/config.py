@@ -20,7 +20,7 @@ DEFAULTS = {
     "jump_shake": True,
     # A focused tab counts as checked only if you used the keyboard or mouse
     # within this many seconds, so a window left in focus while you are away
-    # still turns yellow.
+    # still turns blue.
     "seen_idle_limit": 60,
     # A checked session turns grey after this many seconds without a look.
     "idle_after": 300,

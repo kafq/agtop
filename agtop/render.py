@@ -93,7 +93,7 @@ SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 
 def render_card(session: dict, frame: int = 0) -> str:
-    """Card colours: red needs you, spinner is running, yellow is finished
+    """Card colours: red needs you, spinner is running, blue is finished
     and not checked yet, green is checked, grey is quiet for 5+ minutes,
     grey and dimmed is closed."""
     status = session["status"]
@@ -135,7 +135,7 @@ def render_card(session: dict, frame: int = 0) -> str:
         line1 = f"[bold cyan]{spinner}[/bold cyan]  [bold]{project}[/bold]{tag}{sub}  {suffix}"
     elif status == "done_unseen":
         project = _textual_escape(_truncate(session["project"], content_width))
-        line1 = f"🟡 [bold]{project}[/bold]{tag}{sub}"
+        line1 = f"🔵 [bold]{project}[/bold]{tag}{sub}"
     elif status == "idle":
         project = _textual_escape(_truncate(session["project"], content_width))
         line1 = f"⚪ [bold]{project}[/bold]{tag}{sub}"
@@ -170,8 +170,8 @@ def render_detail(session: dict) -> list:
         "working": "[bold red]RUNNING[/]",
         "active": "[yellow]IDLE[/]",
         "done": "[green]DONE[/]",
-        "waiting_question": "[bold yellow]⚠ WAITING — Needs Input[/]",
-        "waiting_permission": "[bold yellow]⚠ WAITING — Needs Permission[/]",
+        "waiting_question": "[bold red]⚠ WAITING — Needs Input[/]",
+        "waiting_permission": "[bold red]⚠ WAITING — Needs Permission[/]",
     }
     status = status_map.get(session["status"], session["status"].upper())
     parts.append(Text.from_markup(f"{status}  {rich_escape(session['project'])}"))
