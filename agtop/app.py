@@ -42,6 +42,7 @@ from .providers import (
     user_idle_seconds,
 )
 from .render import _clip, render_card, render_detail
+from .keymap import latin_key
 from .seen import SeenStore, classify
 from .subagents import scan_subagents
 from .widgets import AgentDetailModal, AgentFlow, Timeline
@@ -652,6 +653,15 @@ class AgtopApp(App):
             self._show_agent_detail()
             event.prevent_default()
             event.stop()
+
+    async def on_event(self, event: events.Event) -> None:
+        # Shortcuts are Latin letters; translate keys from other layouts
+        # (Russian "о" is the J key) before Textual matches bindings.
+        if isinstance(event, events.Key) and not event.is_forwarded:
+            latin = latin_key(event.key)
+            if latin is not None:
+                event = events.Key(latin, latin)
+        await super().on_event(event)
 
     def on_app_focus(self, event: events.AppFocus) -> None:
         # Read the hovered card before the redraw replaces every card, and
