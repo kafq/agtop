@@ -92,12 +92,14 @@ def _textual_escape(text: str) -> str:
 SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 
-def render_card(session: dict, frame: int = 0) -> str:
+def render_card(session: dict, frame: int = 0, width: int = CARD_WIDTH) -> str:
     """Card colours: red needs you, spinner is running, blue is finished
     and not checked yet, green is checked, grey is quiet for 5+ minutes,
-    grey and dimmed is closed."""
+    grey and dimmed is closed.
+
+    width is the card's inner width in cells; text is cut to fit it."""
     status = session["status"]
-    content_width = W - 5
+    content_width = max(width, CARD_WIDTH // 2) - 5
     if status == "closed":
         project = _textual_escape(_truncate(session["project"], content_width))
         task = _textual_escape(_truncate(session["task"], content_width)) if session["task"] else ""

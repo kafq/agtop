@@ -9,6 +9,7 @@ from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import (
     Footer,
@@ -42,7 +43,7 @@ from .providers import (
     terminal_front_tty,
     user_idle_seconds,
 )
-from .render import _clip, render_card, render_detail
+from .render import CARD_WIDTH, _clip, render_card, render_detail
 from .keymap import latin_key
 from .seen import SeenStore, classify
 from .subagents import scan_subagents
@@ -103,6 +104,16 @@ def _history_session_label(hs: HistorySession) -> str:
     title = hs.first_user_msg[:48] + "…" if len(hs.first_user_msg) > 48 else hs.first_user_msg
     title = title or hs.session_id[:16]
     return f"{time_str}  {title}{src}"
+
+
+class SessionList(ListView):
+    """The session cards. Tells the app when its width changes."""
+
+    class Resized(Message):
+        pass
+
+    def on_resize(self, event: events.Resize) -> None:
+        self.post_message(self.Resized())
 
 
 class AgtopApp(App):
@@ -171,7 +182,7 @@ class AgtopApp(App):
         yield Header(show_clock=True)
         with Horizontal(id="main"):
             with Vertical(id="left"):
-                yield ListView(id="slist")
+                yield SessionList(id="slist")
                 yield Tree("Sessions", id="htree")
             with Vertical(id="right"):
                 yield RichLog(id="output", markup=True, wrap=True, auto_scroll=True)
@@ -313,11 +324,32 @@ class AgtopApp(App):
         item.set_class(status == "done_unseen", "unseen")
         item.set_class(status in ("closed", "idle"), "closed")
 
+    # A card's border and padding take two cells on each side.
+    CARD_CHROME = 4
+
+    def _render_card(self, session: dict) -> str:
+        listview = self.query_one("#slist", ListView)
+        width = listview.scrollable_content_region.width - self.CARD_CHROME
+        return render_card(session, self._spin_frame, width if width > 0 else CARD_WIDTH)
+
+    def on_session_list_resized(self, event: SessionList.Resized) -> None:
+        # Cut the card text to the list's new width.
+        self._rerender_cards()
+
+    def _rerender_cards(self) -> None:
+        if self._history_mode:
+            return
+        items = list(self.query_one("#slist", ListView).children)
+        if len(items) != len(self.sessions):
+            return
+        for item, session in zip(items, self.sessions):
+            item.query_one(Static).update(self._render_card(session))
+
     def _rebuild_list(self) -> None:
         listview = self.query_one("#slist", ListView)
         listview.clear()
         for session in self.sessions:
-            item = ListItem(Static(render_card(session, self._spin_frame), markup=True))
+            item = ListItem(Static(self._render_card(session), markup=True))
             self._apply_item_classes(item, session)
             listview.append(item)
         if self.sessions:
@@ -394,7 +426,7 @@ class AgtopApp(App):
             return
         for item, session in zip(items, self.sessions):
             if session["status"] == "working":
-                item.query_one(Static).update(render_card(session, self._spin_frame))
+                item.query_one(Static).update(self._render_card(session))
 
     def _update_cards(self) -> None:
         listview = self.query_one("#slist", ListView)
@@ -403,7 +435,7 @@ class AgtopApp(App):
             self._rebuild_list()
             return
         for index, session in enumerate(self.sessions):
-            items[index].query_one(Static).update(render_card(session, self._spin_frame))
+            items[index].query_one(Static).update(self._render_card(session))
             self._apply_item_classes(items[index], session)
         selected_index = self._selected_index()
         if self.sessions and listview.index != selected_index:
