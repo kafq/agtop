@@ -40,7 +40,7 @@ ListItem:hover {
     border: solid $accent;
 }
 
-ListItem.--highlight {
+ListItem.-highlight {
     border: double $success;
     background: $success-darken-3;
 }
@@ -50,7 +50,7 @@ ListItem.waiting {
     border: solid $error;
 }
 
-ListItem.waiting.--highlight {
+ListItem.waiting.-highlight {
     background: $error-darken-2;
     border: double $error;
 }
@@ -59,22 +59,27 @@ ListItem.closed {
     border: solid $panel;
 }
 
+ListItem.closed.-highlight {
+    border: double $foreground-muted;
+    background: $panel;
+}
+
 ListItem.unseen {
     border: solid $warning;
 }
 
-ListItem.unseen.--highlight {
+ListItem.unseen.-highlight {
     border: double $warning;
     background: $warning-darken-3;
 }
 
 ListItem.working {
-    border: solid $accent-darken-1;
+    border: solid $primary-darken-1;
 }
 
-ListItem.working.--highlight {
-    border: double $accent;
-    background: $accent-darken-3;
+ListItem.working.-highlight {
+    border: double $primary;
+    background: $primary-darken-3;
 }
 
 RichLog {

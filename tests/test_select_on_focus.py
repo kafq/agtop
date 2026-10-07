@@ -59,3 +59,23 @@ def test_focusing_with_the_mouse_elsewhere_keeps_the_selection(monkeypatch) -> N
             assert listview.index == 0
 
     asyncio.run(run())
+
+
+def test_selected_card_has_a_strong_highlight(monkeypatch) -> None:
+    """Guards against Textual renaming its highlight class again."""
+    monkeypatch.setattr(AgtopApp, "_scan", lambda self: _sessions(3))
+    monkeypatch.setattr("agtop.app.scan_history", lambda days=7: [])
+
+    async def run() -> None:
+        app = AgtopApp()
+        async with app.run_test(size=(80, 40)) as pilot:
+            await pilot.pause()
+            listview = app.query_one("#slist", ListView)
+            assert app.focused is listview
+            listview.index = 1
+            await pilot.pause()
+            selected, other = list(listview.children)[1], list(listview.children)[0]
+            assert selected.styles.border_top[0] == "double"
+            assert other.styles.border_top[0] != "double"
+
+    asyncio.run(run())

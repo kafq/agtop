@@ -183,6 +183,9 @@ class AgtopApp(App):
         # Hide tree and agent-viz initially
         self.query_one("#htree").styles.display = "none"
         self.query_one("#agent-viz").styles.display = "none"
+        # Otherwise the hidden agent view keeps focus and the selected card
+        # only gets the faint "unfocused" highlight.
+        self.query_one("#slist").focus()
         self._cur_interval = REFRESH_FAST
         self._timer = self.set_interval(REFRESH_FAST, self._do_refresh)
         self.set_interval(self.SPINNER_INTERVAL, self._tick_spinner)
@@ -360,6 +363,8 @@ class AgtopApp(App):
         if node is None:
             return
         listview.index = list(listview.children).index(node)
+        # Textual draws the strong selection only while the list has focus.
+        listview.focus()
 
     def on_unmount(self) -> None:
         self._seen.save(time.time())
