@@ -9,6 +9,7 @@ from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.widget import Widget
 from textual.widgets import (
     Footer,
     Header,
@@ -366,10 +367,13 @@ class AgtopApp(App):
         so a card took two clicks. The terminal still reports mouse movement
         while unfocused, so agtop knows which card the click was aimed at.
         """
-        if self._history_mode or self.mouse_over is None:
+        return self._card_session_id(self.mouse_over)
+
+    def _card_session_id(self, node: Optional[Widget]) -> Optional[str]:
+        """Session id of the card that contains this widget, if any."""
+        if self._history_mode or node is None:
             return None
         listview = self.query_one("#slist", ListView)
-        node = self.mouse_over
         while node is not None and not (isinstance(node, ListItem) and node.parent is listview):
             node = node.parent
         if node is None:
@@ -635,8 +639,17 @@ class AgtopApp(App):
         self._sync_footer_bindings()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        """Suppress default Enter/click — jump is bound to 'j' only."""
+        """Suppress default Enter/click — jump is 'j' or a double click."""
         pass
+
+    def on_click(self, event: events.Click) -> None:
+        if event.chain != 2:
+            return
+        session_id = self._card_session_id(event.widget)
+        if session_id is None:
+            return
+        self.sel_id = session_id
+        self._do_jump()
 
     def on_key(self, event: events.Key) -> None:
         if not self._agent_viz_mode:
