@@ -35,11 +35,18 @@ def test_focusing_the_window_selects_the_hovered_card(monkeypatch) -> None:
         async with app.run_test(size=(80, 40)) as pilot:
             await pilot.pause()
             listview = app.query_one("#slist", ListView)
+            app.post_message(events.AppBlur())
+            await pilot.pause()
             target = list(listview.children)[2]
             await pilot.hover(target)
             app.post_message(events.AppFocus())
             await pilot.pause()
+            await pilot.pause()
             assert listview.index == 2
+            items = list(listview.children)
+            assert "-highlight" in items[2].classes
+            assert items[2].styles.border_top[0] == "double"
+            assert app.focused is listview
 
     asyncio.run(run())
 

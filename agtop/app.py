@@ -319,7 +319,18 @@ class AgtopApp(App):
             self._apply_item_classes(item, session)
             listview.append(item)
         if self.sessions:
-            listview.index = self._selected_index()
+            # The new items mount on the next refresh. Setting the index now
+            # would put the highlight class on nothing.
+            self.call_after_refresh(self._restore_list_index)
+
+    def _restore_list_index(self) -> None:
+        listview = self.query_one("#slist", ListView)
+        if not listview.children:
+            return
+        target = min(self._selected_index(), len(listview.children) - 1)
+        # Re-set even when unchanged, so the fresh item gets the highlight.
+        listview.index = None
+        listview.index = target
 
     SPINNER_INTERVAL = 0.1
     # A turn interrupted with Esc fires no Stop hook, so "working" can stick.
@@ -332,6 +343,7 @@ class AgtopApp(App):
         event_state = info.get("_event_state") or {}
         turn_started = event_state.get("last_event_ts") or info.get("_task_ep") or info["mtime"]
         return not has_children_younger_than(pid, now - float(turn_started))
+
     FRONT_TAB_INTERVAL = 1.0
 
     def _watch_front_tab(self) -> None:
@@ -346,25 +358,23 @@ class AgtopApp(App):
             self._front_tty = "" if away else terminal_front_tty()
             time.sleep(self.FRONT_TAB_INTERVAL)
 
-    def _select_hovered_card(self) -> None:
-        """Select the card under the mouse when the window gets focus.
+    def _hovered_session_id(self) -> Optional[str]:
+        """Session id of the card under the mouse, if any.
 
         Terminal.app swallows the click that activates an unfocused window,
-        so without this a card took two clicks. The terminal still reports
-        mouse movement while unfocused, so agtop knows which card the click
-        was aimed at.
+        so a card took two clicks. The terminal still reports mouse movement
+        while unfocused, so agtop knows which card the click was aimed at.
         """
         if self._history_mode or self.mouse_over is None:
-            return
+            return None
         listview = self.query_one("#slist", ListView)
         node = self.mouse_over
         while node is not None and not (isinstance(node, ListItem) and node.parent is listview):
             node = node.parent
         if node is None:
-            return
-        listview.index = list(listview.children).index(node)
-        # Textual draws the strong selection only while the list has focus.
-        listview.focus()
+            return None
+        index = list(listview.children).index(node)
+        return self.sessions[index]["session_id"] if index < len(self.sessions) else None
 
     def on_unmount(self) -> None:
         self._seen.save(time.time())
@@ -644,8 +654,15 @@ class AgtopApp(App):
             event.stop()
 
     def on_app_focus(self, event: events.AppFocus) -> None:
+        # Read the hovered card before the redraw replaces every card, and
+        # make it the selection the rebuilt list restores.
+        hovered = self._hovered_session_id()
+        if hovered:
+            self.sel_id = hovered
         self._force_redraw()
-        self._select_hovered_card()
+        if not self._history_mode:
+            # Textual draws the strong selection only while the list has focus.
+            self.query_one("#slist", ListView).focus()
 
     def on_screen_resume(self, event: events.ScreenResume) -> None:
         self._force_redraw()
